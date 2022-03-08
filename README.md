@@ -6,6 +6,23 @@ XtalMesh is an open-source code and containerized software suite used to generat
 
 XtalMesh makes use of the powerful and robust tetrahedral meshing code [fTetWild](https://github.com/wildmeshing/fTetWild) as well as geometry processing libraries [PyMesh](https://github.com/PyMesh/PyMesh) and [libigl](https://github.com/libigl/libigl) with python bindings. This collection of software enables the design of customized meshing workflows in a simple python environment.
 
+```bash
+@article{Hestroffer2022,
+author={Hestroffer, Jonathan M. and Beyerlein, Irene J.},
+title={XtalMesh Toolkit: High-Fidelity Mesh Generation of Polycrystals},
+journal={Integrating Materials and Manufacturing Innovation},
+year={2022},
+month={Mar},
+day={01},
+volume={11},
+number={1},
+pages={109-120},
+issn={2193-9772},
+doi={10.1007/s40192-022-00251-w},
+url={https://doi.org/10.1007/s40192-022-00251-w}
+}
+```
+
 ## Installation
 
 #### Pulling Docker Image (Recommended)
