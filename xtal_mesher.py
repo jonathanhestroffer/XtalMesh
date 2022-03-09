@@ -53,7 +53,7 @@ def tets_to_tris(tets):
         tris[4*i:4*(i+1)] = np.asarray([[c[0], c[2], c[1], c[4], c[5], c[6]],
                                         [c[0], c[1], c[3], c[4], c[7], c[8]],
                                         [c[0], c[3], c[2], c[6], c[7], c[9]],
-                                        [c[1], c[2], c[3], c[5], c[8], c[9]]], dtype='int32')
+                                        [c[1], c[2], c[3], c[5], c[8], c[9]]], dtype="int32")
     return tris
 
 
@@ -97,7 +97,7 @@ def generate_element_sets(mesh, grain_ids):
         Mesh with added element sets.
     """
     cell_data = np.zeros((len(grain_ids),))
-    mesh.cell_sets['ALLELEMENTS'] = [np.arange(len(grain_ids))]
+    mesh.cell_sets["ALLELEMENTS"] = [np.arange(len(grain_ids))]
     for g in np.unique(grain_ids):
         numStr = str(g).zfill(4)
         mesh.cell_sets["GRAIN_" +
@@ -124,7 +124,7 @@ def generate_node_sets(mesh, nodes, epsilon):
     mesh : meshio.Mesh object
         Mesh with added node sets.
     """
-    mesh.point_sets['ALLNODES'] = np.arange(len(nodes))
+    mesh.point_sets["ALLNODES"] = np.arange(len(nodes))
 
     # get boundary nodes
     tets = mesh.cells[0][1]
@@ -132,18 +132,18 @@ def generate_node_sets(mesh, nodes, epsilon):
     b_node = nodes[b_node_id]
 
     # get X, Y, Z limits of RVE
-    V, _ = igl.read_triangle_mesh('/work/Whole.stl')
+    V, _ = igl.read_triangle_mesh(cwd +"/Whole.stl")
     min_x, max_x = np.min(V[:, 0]), np.max(V[:, 0])
     min_y, max_y = np.min(V[:, 1]), np.max(V[:, 1])
     min_z, max_z = np.min(V[:, 2]), np.max(V[:, 2])
 
     # assign boundary condition node sets (faces of RVE)
-    bc_sets = ['f_n-1',
-               'f_n+1',
-               'f_n-2',
-               'f_n+2',
-               'f_n-3',
-               'f_n+3']
+    bc_sets = ["f_n-1",
+               "f_n+1",
+               "f_n-2",
+               "f_n+2",
+               "f_n-3",
+               "f_n+3"]
     delta = igl.bounding_box_diagonal(nodes)*float(epsilon)
     BCs = [np.where(b_node[:, 0] < min_x+delta)[0],
            np.where(b_node[:, 0] > max_x-delta)[0],
@@ -158,6 +158,7 @@ def generate_node_sets(mesh, nodes, epsilon):
 
 # Start program
 t0 = time.time()
+cwd = os.getcwd()
 edge_length = sys.argv[1]
 epsilon = sys.argv[2]
 
@@ -170,19 +171,19 @@ print("================")
 print("Meshing With fTetWild")
 os.system(
     "/fTetWild/build/./FloatTetwild_bin"
-    + " --input /work/Whole.stl"
-    + " --output /work/Volume_1.msh"
+    + " --input " + cwd + "/Whole.stl"
+    + " --output " + cwd + "/Volume_1.msh"
     + " --disable-filtering"
-    + " -l" + edge_length
-    + " -e" + epsilon
+    + " -l " + edge_length
+    + " -e " + epsilon
 )
-while os.path.exists("/work/Volume_1.msh") == False:
+while os.path.exists(cwd + "/Volume_1.msh") == False:
     time.sleep(10)
 print("Meshing Completed")
 
 
 # Load fTetWild output
-mesh = pymesh.load_mesh("/work/Volume_1.msh")
+mesh = pymesh.load_mesh(cwd + "/Volume_1.msh")
 elements = mesh.elements
 nodes = mesh.vertices
 
@@ -194,7 +195,7 @@ grain_ids = np.zeros((numcells,))
 
 
 # Loop through grains & perform inside/outside segmentation
-files = glob.glob('/work/GrainSTLs/*.stl')
+files = glob.glob(cwd + "/GrainSTLs/*.stl")
 for f in tqdm(files,
               leave=True,
               ncols=0,
@@ -211,9 +212,9 @@ for f in tqdm(files,
     grain_ids[np.where(P > 0.01)[0]] = int(grain_id)
 
 
-# Remove bounding mesh
+# Remove void mesh (ID == 0)
 print("Removing Bounding Mesh")
-ind = np.where(~np.isin(grain_ids, [0, 9999]))[0]
+ind = np.where(grain_ids != 0)[0]
 submesh = pymesh.submesh(mesh, ind, 0)
 grain_ids = grain_ids[ind].astype(int)
 
@@ -241,22 +242,22 @@ mesh = generate_node_sets(mesh, nodes, epsilon)
 
 # Write output
 print("Writing .VTK & .INP")
-meshio.abaqus.write('/work/XtalMesh.inp', mesh)
-meshio.vtk.write("/work/XtalMesh.vtk", mesh)
+meshio.abaqus.write(cwd + "/XtalMesh.inp", mesh)
+meshio.vtk.write(cwd + "/XtalMesh.vtk", mesh)
 
 
 # Fix XtalMesh.inp
-with open('/work/XtalMesh.inp', 'r+') as f:
+with open(cwd + "/XtalMesh.inp", "r+") as f:
     lines = f.readlines()
     f.seek(0)
     f.truncate()
-    idx = lines.index('*Element,type=C3D10MH\n')
-    lines[idx] = '*Element, type=C3D10\n'
+    idx = lines.index("*Element,type=C3D10MH\n")
+    lines[idx] = "*Element, type=C3D10\n"
     f.writelines(lines[:-1])
 
 
 # Clean-up
-os.system("rm -rf /work/Volume_1*")
+os.system("rm -rf " + cwd + "/Volume_1*")
 os.system("rm -rf /XtalMesh/lin*")
 
 
