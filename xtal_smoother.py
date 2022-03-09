@@ -60,22 +60,22 @@ def graph_smooth(V, F, feat):
     V : Updated vertex/node coordinates
     """
     # define edge weights
-    if feat == 'ext_triple':
+    if feat == "ext_triple":
         edge_weights = 1*np.isin(ntype, 13) + 2*np.isin(ntype, 14)
-    elif feat == 'int_triple':
+    elif feat == "int_triple":
         edge_weights = 1*np.isin(ntype, 3) + 2*np.isin(ntype, 4)
     else:
         edge_weights = np.ones((len(V),))
 
     # form edge-weighted graph
-    print('\t forming graph')
+    print("\t forming graph")
     G = nx.Graph()
     G.add_weighted_edges_from(form_edge_graph(F, edge_weights))
 
     # compute Laplacian
     nodelist = np.linspace(0, len(V)-1, len(V))
-    print('\t computing laplacian')
-    L = laplacian_matrix(G, nodelist=nodelist, weight='weight')
+    print("\t computing laplacian")
+    L = laplacian_matrix(G, nodelist=nodelist, weight="weight")
 
     # compute weight normalization
     W_norm = np.sum(abs(L), 0)
@@ -83,14 +83,14 @@ def graph_smooth(V, F, feat):
     W_norm = 1/np.tile(W_norm, [3, 1]).transpose()
 
     # perform smoothing
-    if feat != 'bound':
-        for m in tqdm(range(laplacian_iters), position=0, ncols=0, desc='\t smoothing'):
+    if feat != "bound":
+        for m in tqdm(range(laplacian_iters), position=0, ncols=0, desc="\t smoothing"):
             Vnew = V - lamda*np.multiply(geom, np.multiply(L.dot(V), W_norm))
             V = Vnew.copy()
     else:
         pinned = np.isin(ntype, [2, 12])*1
         pinned = np.tile(pinned, [3, 1]).transpose()
-        for m in tqdm(range(laplacian_iters), position=0, ncols=0, desc='\t smoothing'):
+        for m in tqdm(range(laplacian_iters), position=0, ncols=0, desc="\t smoothing"):
             Vnew = V - lamda * \
                 np.multiply(geom*pinned, np.multiply(L.dot(V), W_norm))
             V = Vnew.copy()
@@ -112,7 +112,7 @@ def write_grain_mesh(grain_id):
     """
     queryF = 1*np.isin(flabel, grain_id)
     grainF = F[np.where(np.sum(queryF, 1) > 0)[0]]
-    fname = '/work/GrainSTLs/'+str(grain_id)+'.stl'
+    fname = cwd + "/GrainSTLs/" + str(grain_id) + ".stl"
     igl.write_triangle_mesh(fname, V, grainF, force_ascii=False)
     mesh = pymesh.compute_outer_hull(pymesh.load_mesh(fname))
     pymesh.save_mesh(fname, mesh)
@@ -140,20 +140,21 @@ def natural_sort(l):
 
 # Start program
 t0 = time.time()
+cwd = os.getcwd()
 laplacian_iters = int(sys.argv[1])
 lamda = float(sys.argv[2])
 
-print('\n\n================')
-print(' XTAL_SMOOTHER')
-print('================')
+print("\n\n================")
+print(" XTAL_SMOOTHER")
+print("================")
 
 
 # Load Data
-print('Reading Triangle Data')
-V = pd.read_csv("/work/nodes.txt", skiprows=4, sep='\s+').to_numpy()
-F = pd.read_csv("/work/triangles.txt", skiprows=8, sep='\s+').to_numpy()
-ntype = pd.read_csv("/work/nodetype.txt").to_numpy().flatten()
-flabel = pd.read_csv("/work/facelabels.txt").to_numpy()
+print("Reading Triangle Data")
+V = pd.read_csv(cwd + "/nodes.txt", skiprows=4, sep="\s+").to_numpy()
+F = pd.read_csv(cwd + "/triangles.txt", skiprows=8, sep="\s+").to_numpy()
+ntype = pd.read_csv(cwd + "/nodetype.txt").to_numpy().flatten()
+flabel = pd.read_csv(cwd + "/facelabels.txt").to_numpy()
 
 
 # Setting up geometric constraints for nodes on faces/edges/corners
@@ -164,17 +165,18 @@ geom = np.vstack([xface, yface, zface]).transpose()
 
 
 # Perform smoothing
-print('Smooth Exterior Triple Lines')
-V = graph_smooth(V, F, feat='ext_triple')
-print('Smooth Interior Triple Lines')
-V = graph_smooth(V, F, feat='int_triple')
-print('Smooth Boundaries')
-V = graph_smooth(V, F, feat='bound')
+print("Smooth Exterior Triple Lines")
+V = graph_smooth(V, F, feat="ext_triple")
+print("Smooth Interior Triple Lines")
+V = graph_smooth(V, F, feat="int_triple")
+print("Smooth Boundaries")
+V = graph_smooth(V, F, feat="bound")
 
 
 # Process-based parallelization of writing grain surface meshes
-os.system('rm -r /work/GrainSTLs')
-os.mkdir('/work/GrainSTLs')
+if os.path.isdir(cwd + "/GrainSTLs"):
+    os.system("rm -r " + cwd + "/GrainSTLs")
+os.mkdir(cwd + "/GrainSTLs")
 print("Writing Grain Surface Meshes")
 grain_ids = np.unique(flabel)
 pool = multiprocessing.Pool(multiprocessing.cpu_count())
@@ -184,8 +186,8 @@ pool.join()
 
 
 # Write whole surface mesh
-print('Writing Whole Surface Mesh')
-igl.write_triangle_mesh('/work/Whole.stl', V, F, force_ascii=False)
+print("Writing Whole Surface Mesh")
+igl.write_triangle_mesh(cwd + "/Whole.stl", V, F, force_ascii=False)
 
 
-print('FINISHED - Total processing time: ', time.time() - t0, 's\n')
+print("FINISHED - Total processing time: ", time.time() - t0, "s\n")
