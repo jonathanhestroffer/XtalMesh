@@ -56,6 +56,15 @@ XtalMesh requires four ```.txt``` files and they include:
 
 These must be generated for your 3D microstructure using [DREAM.3D](http://dream3d.bluequartz.net/). The ```.dream3d``` pipeline used to create these files as well as the files themselves used in this tutorial can be found in [SyntheticTest](SyntheticTest).
 
+#### Preparing Scripts
+
+Along with the ```.txt``` files, you must also have these scripts in your work directory:
+
+- xtal_smoother.py
+- xtal_mesher.py
+- tet_mesh_l2q.cpp
+- tet_mesh_l2q.sh
+
 #### Running Docker Container
 
 The preferred method of running the Docker container is with the command ```docker run --rm -it -v <host-directory>:<container-directory> jonathanhestroffer/xtalmesh```.
@@ -65,15 +74,15 @@ Example:
 docker run --rm -it -v F:/SyntheticTest/:/work jonathanhestroffer/xtalmesh
 ```
 
-The above deploys a container with directory ```/work``` synced to the ```/SyntheticTest``` directory on the host machine. During execution of XtalMesh, all output files will be generated inside the host directory.
+The above deploys a container with directory ```/work``` synced to the ```/SyntheticTest``` directory on the host machine, your work directory in this example. During execution of XtalMesh, all output files will be generated inside the host directory.
 
 #### Smoothing
 
-XtalMesh requires the execution of just two python scripts; the first performs Laplacian smoothing of the voxelated microstructure, and can be run from the host directory, where input files are stored, as ```python3 /XtalMesh/xtal_smoother.py <num-iters> <lambda>```
+XtalMesh requires the execution of just two python scripts; the first performs Laplacian smoothing of the voxelated microstructure, and can be run from the host directory, where input files are stored, as ```python3 xtal_smoother.py <num-iters> <lambda>```
 
 Example:
 ```
-python3 /XtalMesh/xtal_smoother.py 20 1.0
+python3 xtal_smoother.py 20 1.0
 ```
 
 Command Line Arguments:
@@ -86,11 +95,11 @@ Once smoothing is complete, all individual feature surface meshes will be writte
 
 #### Meshing
 
-After smoothing, to create volume mesh for the microstructure, run another python script from the host directory, where input files are stored, as ```python3 /XtalMesh/xtal_mesher.py <edge-length> <epsilon>```. This will run the [fTetWild](https://github.com/wildmeshing/fTetWild) meshing code.
+After smoothing, to create volume mesh for the microstructure, run another python script from the host directory, where input files are stored, as ```python3 xtal_mesher.py <edge-length> <epsilon>```. This will run the [fTetWild](https://github.com/wildmeshing/fTetWild) meshing code.
 
 Example:
 ```
-python3 /XtalMesh/xtal_mesher.py 0.05 1e-3
+python3 xtal_mesher.py 0.05 1e-3
 ```
 
 Command Line Arguments:
@@ -132,20 +141,14 @@ One option is to spawn a new shell within your container and interact with it as
 ```bash
 singularity shell xtalmesh_latest.sif
 ```
-```bash
-python3 /XtalMesh/xtal_smoother.py 20 1.0
-```
-```bash
-python3 /XtalMesh/xtal_mesher.py 0.05 1e-3
-```
 
 #### Executing Commands
 
 The second option is to execute a XtalMesh command within a container by specifying the image file.
 
 ```bash
-singularity exec xtalmesh_latest.sif python3 /XtalMesh/xtal_smoother.py 20 1.0
+singularity exec xtalmesh_latest.sif python3 xtal_smoother.py 20 1.0
 ```
 ```bash
-singularity exec xtalmesh_latest.sif python3 /XtalMesh/xtal_mesher.py 0.05 1e-3
+singularity exec xtalmesh_latest.sif python3 xtal_mesher.py 0.05 1e-3
 ```
