@@ -54,7 +54,7 @@ XtalMesh requires four ```.txt``` files and they include:
 - triangles.txt
 - facelabels.txt
 
-These must be generated for your 3D microstructure using [DREAM.3D](http://dream3d.bluequartz.net/). The ```.dream3d``` pipeline used to create these files as well as the files themselves used in this tutorial can be found in [SyntheticTest](SyntheticTest).
+These must be generated for your 3D microstructure using [DREAM.3D](http://dream3d.bluequartz.net/). The ```.dream3d``` pipeline used to create these files as well as the files themselves used in this tutorial can be found in [SyntheticTest](SyntheticTest). Please note that grain/feature IDs equal to 0 will be treated as void material and will be removed after meshing.
 
 #### Preparing Scripts
 
@@ -136,7 +136,7 @@ The above commands will download the XtalMesh docker image and create a Singular
 
 #### Shell
 
-One option is to spawn a new shell within your container and interact with it as though it were a small virtual machine. From there you can execute XtalMesh scripts as normal. Note that this is all done in your desired work directory where your input files are located.
+One option is to spawn a new shell within your container and interact with it as though it were a small virtual machine. From there you can execute XtalMesh scripts as normal. Note that this is all done in your desired work directory.
 
 ```bash
 singularity shell xtalmesh_latest.sif
