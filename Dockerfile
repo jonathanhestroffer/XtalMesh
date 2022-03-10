@@ -33,10 +33,6 @@ RUN \
 # XtalMesh
 RUN \
 	git clone https://github.com/jonathanhestroffer/XtalMesh.git
-RUN \
-	cd /XtalMesh && \
-	chmod -R 777 /XtalMesh && \
-	./tet_mesh_l2q.sh
 
 
 # PyMesh
@@ -58,8 +54,8 @@ RUN \
 RUN \
 	cd $PYMESH_PATH && \
 	python3 setup.py install
-	
-	
+
+
 # fTetWild
 RUN \
 	git clone https://github.com/wildmeshing/fTetWild.git
@@ -69,8 +65,8 @@ RUN \
 	cd build && \
 	cmake .. && \
 	make
-	
-	
+
+
 # libigl
 RUN \
 	git clone https://github.com/libigl/libigl-python-bindings.git
@@ -78,8 +74,8 @@ RUN \
 	cd libigl-python-bindings && \
 	python3 setup.py install && \
 	python3 setup.py test
-	
-	
+
+
 RUN \
 	pip install numba && \
 	pip install pandas

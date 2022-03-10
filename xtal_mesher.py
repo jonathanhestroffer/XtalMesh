@@ -166,6 +166,7 @@ print(" XTAL_MESHER")
 print("================")
 
 # Compile c++ linear->quad conversion script
+os.system("chmod -R 777 $PWD")
 os.system("./tet_mesh_l2q.sh")
 
 # Call fTetWild
