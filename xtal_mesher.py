@@ -132,7 +132,7 @@ def generate_node_sets(mesh, nodes, epsilon):
     b_node = nodes[b_node_id]
 
     # get X, Y, Z limits of RVE
-    V, _ = igl.read_triangle_mesh(cwd +"/Whole.stl")
+    V, _ = igl.read_triangle_mesh("Whole.stl")
     min_x, max_x = np.min(V[:, 0]), np.max(V[:, 0])
     min_y, max_y = np.min(V[:, 1]), np.max(V[:, 1])
     min_z, max_z = np.min(V[:, 2]), np.max(V[:, 2])
@@ -158,7 +158,6 @@ def generate_node_sets(mesh, nodes, epsilon):
 
 # Start program
 t0 = time.time()
-cwd = os.getcwd()
 edge_length = sys.argv[1]
 epsilon = sys.argv[2]
 
@@ -166,24 +165,26 @@ print("\n\n================")
 print(" XTAL_MESHER")
 print("================")
 
+# Compile c++ linear->quad conversion script
+os.system("./tet_mesh_l2q.sh")
 
 # Call fTetWild
 print("Meshing With fTetWild")
 os.system(
     "/fTetWild/build/./FloatTetwild_bin"
-    + " --input " + cwd + "/Whole.stl"
-    + " --output " + cwd + "/Volume_1.msh"
+    + " --input Whole.stl"
+    + " --output Volume_1.msh"
     + " --disable-filtering"
     + " -l " + edge_length
     + " -e " + epsilon
 )
-while os.path.exists(cwd + "/Volume_1.msh") == False:
+while os.path.exists("Volume_1.msh") == False:
     time.sleep(10)
 print("Meshing Completed")
 
 
 # Load fTetWild output
-mesh = pymesh.load_mesh(cwd + "/Volume_1.msh")
+mesh = pymesh.load_mesh("Volume_1.msh")
 elements = mesh.elements
 nodes = mesh.vertices
 
@@ -195,7 +196,7 @@ grain_ids = np.zeros((numcells,))
 
 
 # Loop through grains & perform inside/outside segmentation
-files = glob.glob(cwd + "/GrainSTLs/*.stl")
+files = glob.glob("GrainSTLs/*.stl")
 for f in tqdm(files,
               leave=True,
               ncols=0,
@@ -222,16 +223,16 @@ grain_ids = grain_ids[ind].astype(int)
 # Convert to quadratic with tet_mesh_l2q
 print("Converting To Quadratic Tets")
 nodes, elements = submesh.vertices, submesh.elements
-np.savetxt("/XtalMesh/lin_nodes.txt", nodes)
-np.savetxt("/XtalMesh/lin_elements.txt", elements, fmt="%i")
-os.system("/XtalMesh/./tet_mesh_l2q lin")
-while os.path.exists("/XtalMesh/lin_l2q_elements.txt") == False:
+np.savetxt("lin_nodes.txt", nodes)
+np.savetxt("lin_elements.txt", elements, fmt="%i")
+os.system("./tet_mesh_l2q lin")
+while os.path.exists("lin_l2q_elements.txt") == False:
     time.sleep(10)
 
 
 # Load quadratic mesh & re-order elements
-nodes = np.loadtxt("/XtalMesh/lin_l2q_nodes.txt").astype("double")
-elements = np.loadtxt("/XtalMesh/lin_l2q_elements.txt").astype("int32")
+nodes = np.loadtxt("lin_l2q_nodes.txt").astype("double")
+elements = np.loadtxt("lin_l2q_elements.txt").astype("int32")
 elements = elements[:, [0, 1, 2, 3, 4, 7, 5, 6, 8, 9]]
 cells = [("tetra10", elements)]
 mesh = meshio.Mesh(nodes, cells)
@@ -242,12 +243,12 @@ mesh = generate_node_sets(mesh, nodes, epsilon)
 
 # Write output
 print("Writing .VTK & .INP")
-meshio.abaqus.write(cwd + "/XtalMesh.inp", mesh)
-meshio.vtk.write(cwd + "/XtalMesh.vtk", mesh)
+meshio.abaqus.write("XtalMesh.inp", mesh)
+meshio.vtk.write("XtalMesh.vtk", mesh)
 
 
 # Fix XtalMesh.inp
-with open(cwd + "/XtalMesh.inp", "r+") as f:
+with open("XtalMesh.inp", "r+") as f:
     lines = f.readlines()
     f.seek(0)
     f.truncate()
@@ -257,8 +258,8 @@ with open(cwd + "/XtalMesh.inp", "r+") as f:
 
 
 # Clean-up
-os.system("rm -rf " + cwd + "/Volume_1*")
-os.system("rm -rf /XtalMesh/lin*")
+os.system("rm -rf Volume_1*")
+os.system("rm -rf lin*")
 
 
 print("FINISHED - Total processing time: ", time.time() - t0, "s\n")
