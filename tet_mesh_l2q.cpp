@@ -139,10 +139,10 @@ int main ( int argc, char *argv[] )
 //
 //  Create the filenames.
 //
-  input_node_filename = "/XtalMesh/lin_nodes.txt";
-  input_element_filename = "/XtalMesh/lin_elements.txt";
-  output_node_filename = "/XtalMesh/lin_l2q_nodes.txt";
-  output_element_filename = "/XtalMesh/lin_l2q_elements.txt";
+  input_node_filename = "lin_nodes.txt";
+  input_element_filename = "lin_elements.txt";
+  output_node_filename = "lin_l2q_nodes.txt";
+  output_element_filename = "lin_l2q_elements.txt";
 //
 //  Read the node data.
 //
