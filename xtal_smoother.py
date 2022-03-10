@@ -112,7 +112,7 @@ def write_grain_mesh(grain_id):
     """
     queryF = 1*np.isin(flabel, grain_id)
     grainF = F[np.where(np.sum(queryF, 1) > 0)[0]]
-    fname = cwd + "/GrainSTLs/" + str(grain_id) + ".stl"
+    fname = "GrainSTLs/" + str(grain_id) + ".stl"
     igl.write_triangle_mesh(fname, V, grainF, force_ascii=False)
     mesh = pymesh.compute_outer_hull(pymesh.load_mesh(fname))
     pymesh.save_mesh(fname, mesh)
@@ -140,7 +140,6 @@ def natural_sort(l):
 
 # Start program
 t0 = time.time()
-cwd = os.getcwd()
 laplacian_iters = int(sys.argv[1])
 lamda = float(sys.argv[2])
 
@@ -151,10 +150,10 @@ print("================")
 
 # Load Data
 print("Reading Triangle Data")
-V = pd.read_csv(cwd + "/nodes.txt", skiprows=4, sep="\s+").to_numpy()
-F = pd.read_csv(cwd + "/triangles.txt", skiprows=8, sep="\s+").to_numpy()
-ntype = pd.read_csv(cwd + "/nodetype.txt").to_numpy().flatten()
-flabel = pd.read_csv(cwd + "/facelabels.txt").to_numpy()
+V = pd.read_csv("nodes.txt", skiprows=4, sep="\s+").to_numpy()
+F = pd.read_csv("triangles.txt", skiprows=8, sep="\s+").to_numpy()
+ntype = pd.read_csv("nodetype.txt").to_numpy().flatten()
+flabel = pd.read_csv("facelabels.txt").to_numpy()
 
 
 # Setting up geometric constraints for nodes on faces/edges/corners
@@ -174,9 +173,9 @@ V = graph_smooth(V, F, feat="bound")
 
 
 # Process-based parallelization of writing grain surface meshes
-if os.path.isdir(cwd + "/GrainSTLs"):
-    os.system("rm -r " + cwd + "/GrainSTLs")
-os.mkdir(cwd + "/GrainSTLs")
+if os.path.isdir("GrainSTLs"):
+    os.system("rm -r GrainSTLs")
+os.mkdir("GrainSTLs")
 print("Writing Grain Surface Meshes")
 grain_ids = np.unique(flabel)
 pool = multiprocessing.Pool(multiprocessing.cpu_count())
@@ -187,7 +186,7 @@ pool.join()
 
 # Write whole surface mesh
 print("Writing Whole Surface Mesh")
-igl.write_triangle_mesh(cwd + "/Whole.stl", V, F, force_ascii=False)
+igl.write_triangle_mesh("Whole.stl", V, F, force_ascii=False)
 
 
 print("FINISHED - Total processing time: ", time.time() - t0, "s\n")
