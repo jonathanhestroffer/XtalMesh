@@ -1,6 +1,6 @@
-# XtalMesh - Tetrahedral Meshing of Polycrystals
+# XtalMesh : High-Fidelity Mesh Generation of Polycrystals
 
-<img src="docs/title.PNG" width=100% height=100%>
+<img src="docs/Figure_1.png" width=100% height=100%>
 
 XtalMesh ('crystal mesh') is an open-source code and containerized software suite used to generate tetrahedral finite-element mesh of polycrystals, and works well for both synthetic and experimental microstructures. The real value of XtalMesh lies in its ability to produce high-fidelity mesh representations of complex grain morphologies, particularly useful when studying local mechanical behavior near/at microstructural hetergoneities like grain boundaries and triple junctions. 
 
@@ -25,7 +25,7 @@ url={https://doi.org/10.1007/s40192-022-00251-w}
 
 ## Installation
 
-#### Pulling Docker Image (Recommended)
+### Pulling Docker Image (Recommended)
 
 Install and run [Docker](https://docs.docker.com/), then within your command-line shell of choice, pull the XtalMesh Docker image.
 
@@ -33,9 +33,9 @@ Install and run [Docker](https://docs.docker.com/), then within your command-lin
 docker pull jonathanhestroffer/xtalmesh
 ```
 
-#### Building Image from Dockerfile
+### Building Image from Dockerfile (Not Recommended)
 
-While not recommended, you can also choose to build XtalMesh from the Dockerfile provided. In a directory containing only the Dockerfile provided, run the following command:
+While not recommended, you can also choose to build XtalMesh from the Dockerfile provided. In a directory containing only the Dockerfile provided, run the following command,
 
 ```bash
 docker build -t jonathanhestroffer/xtalmesh .
@@ -43,80 +43,87 @@ docker build -t jonathanhestroffer/xtalmesh .
 
 ## Basic Usage
 
-The following is a tutorial of XtalMesh using the example files provided in the [SyntheticTest](SyntheticTest) directory of this repository. Save these to your work directory.
+The following is a tutorial of XtalMesh using the example microstructure data provided in the [SyntheticTest](SyntheticTest) directory of this repository.
 
-#### Preparing Input
+### 1. Running the Docker Container
 
-XtalMesh requires four ```.txt``` files and they include:
+The preferred method of running the Docker container is with the command ```docker run --rm -it -v <host-directory>:<container-directory> jonathanhestroffer/xtalmesh```.
+
+Example:
+```bash
+docker run --rm -it -v F:/SyntheticTest:/work jonathanhestroffer/xtalmesh
+```
+
+The example above deploys a Docker container with directory ```/work``` synced to my host directory ```F:/SyntheticTest``` on my host machine. All files located in ```/work```, mainly those generated during the execution of XtalMesh, will be available on the host machine in the host directory. Likewise, any files placed in the synced host directory will be available in the Docker container in ```/work```.
+
+### 2. Preparing Input and Scripts
+
+XtalMesh requires four ```.txt``` input files and they include:
 
 - nodes.txt
 - nodetype.txt
 - triangles.txt
 - facelabels.txt
 
-These must be generated for your 3D microstructure using [DREAM.3D](http://dream3d.bluequartz.net/). The ```.dream3d``` pipeline used to create these files as well as the files themselves used in this tutorial can be found in [SyntheticTest](SyntheticTest). Please note that grain/feature IDs equal to 0 will be treated as void material and will be removed after meshing.
+These files describe the triangle geometry of your voxelized input data and must be generated for your 3D microstructure using [DREAM.3D](http://dream3d.bluequartz.net/). The ```.dream3d``` pipeline used to create these files as well as the files themselves used in this tutorial can be found in [SyntheticTest](SyntheticTest). Please note that grain/feature IDs equal to 0 will be treated as void material and will be removed after meshing.
 
-#### Preparing Scripts
+XtalMesh requires these input files be located in the container directory you created, in this case ```/work```. When considering real usage of XtalMesh, these files would be prepared outside of Docker using DREAM.3D and copied over to the host directory. But for the purposes of this tutorial, inside the Docker container, we can simply copy those available to us in the ```/XtalMesh/SyntheticTest``` directory as,
+```bash
+cp /XtalMesh/SyntheticTest/*.txt /work
+```
 
-Along with the ```.txt``` files, you must also have these scripts in your work directory:
+Along with the relevant ```.txt``` files, you must also have these scripts in your container work directory:
 
 - xtal_smoother.py
 - xtal_mesher.py
-- tet_mesh_l2q.cpp
-- tet_mesh_l2q.sh
 
-#### Running Docker Container
-
-The preferred method of running the Docker container is with the command ```docker run --rm -it -v <host-directory>:<container-directory> jonathanhestroffer/xtalmesh```.
-
-Example:
+XtalMesh requires the execution of these two python scripts, one is for smoothing and the other meshing. Both scripts must be run from the container work directory. In this tutorial, inside the Docker container, we can simply copy them to ```/work``` as,
 ```bash
-docker run --rm -it -v F:/SyntheticTest/:/work jonathanhestroffer/xtalmesh
+cp /XtalMesh/*.py /work
 ```
 
-The above deploys a container with directory ```/work``` synced to the ```/SyntheticTest``` directory on the host machine, your work directory in this example. During execution of XtalMesh, all output files will be generated inside the host directory.
+### 3. Smoothing
 
-#### Smoothing
-
-XtalMesh requires the execution of just two python scripts; the first performs Laplacian smoothing of the voxelated microstructure, and can be run from the host directory, where input files are stored, as ```python3 xtal_smoother.py <num-iters> <lambda>```
-
-Example:
+Inside the Docker container, move to the created container work directory, where all relevant input files and scripts have been located.
+```bash
+cd work
 ```
-python3 xtal_smoother.py 20 1.0
-```
+Once inside the correct directory, execute the ```xtal_smoother.py``` script. This script performs Laplacian smoothing of the voxelated microstructure with the following available command-line arguments.
 
 Command Line Arguments:
 ```
-<num-iters> INT               Number of Laplacian smoothing iterations
-<lambda> FLOAT                Laplacian operator, λ > 0 (1.0 is a good default value)
+Usage: python3 xtal_smoother.py [OPTIONS]
+Options:
+  -h,--help                   Print this help message and exit
+  --num-iters INT             Number of Laplacian smoothing iterations (default: 20)
+  --lamda FLOAT               Laplacian operator, λ > 0 (default: 1.0)
 ```
 
-Once smoothing is complete, all individual feature surface meshes will be written to ```/<host-directory>/GrainSTLs``` directory. These will then be stitched together to form ```Whole.stl```, available in host directory, used for subsequent volume meshing. Please note that the number of input vertices is preserved during surface smoothing. This means smoother grain boundaries and triple junctions can be achieved with higher resolution input microstructures. However, be wary of excessive input resolution as this will have a major impact on memory usage and runtime.
+Once smoothing is complete, all individual feature/grain surface meshes will be written to ```/work/GrainSTLs``` directory inside the Docker container. These will then be stitched together to form ```Whole.stl```, available in ```/work```, used for subsequent volume meshing. Please note that the number of input vertices is preserved during surface smoothing. This means smoother grain boundaries and triple junctions can be achieved with higher resolution input microstructures. However, be wary of excessive input resolution as this will have a major impact on memory usage and runtime.
 
-#### Meshing
+### 4. Meshing
 
-After smoothing, to create volume mesh for the microstructure, run another python script from the host directory, where input files are stored, as ```python3 xtal_mesher.py <edge-length> <epsilon>```. This will run the [fTetWild](https://github.com/wildmeshing/fTetWild) meshing code.
-
-Example:
-```
-python3 xtal_mesher.py 0.05 1e-3
-```
+After smoothing, to create volume mesh for the microstructure, run the ```xtal_mesher.py``` script from the same directory. This will run the [fTetWild](https://github.com/wildmeshing/fTetWild) meshing code with the following available command-line arguments.
 
 Command Line Arguments:
 ```
-<edge-length> FLOAT          Target element edge-length, ratio of the body diagonal (e.g., 0.05 = b/20               
-<epsilon> FLOAT              Surface mesh deviation tolerance, ratio of the body diagonal (e.g., 1e-3 = b/1000)
+Usage: python3 xtal_mesher.py [OPTIONS]
+Options:
+  -h,--help                   Print this help message and exit
+  --edge-length FLOAT         Target element edge-length, ratio of the body diagonal (e.g., 5e-2 = b/20, default: 5e-2)               
+  --epsilon FLOAT             Surface mesh deviation tolerance, ratio of the body diagonal (e.g., 1e-3 = b/1000, default: 1e-3)
+  --order INT                 Element order, linear or quadratic (1 or 2) (default: 2)
 ```
 
-Apart from the input microstructure size and resolution, values of ```<edge-length>``` and ```<epsilon>``` can largely affect RAM usage and runtime. Start with values of 0.05 and 1e-3 respectively and adjust as needed. If more RAM is required than what is allocated to the Docker container, then this process will be killed.
+Apart from the input microstructure size and resolution, values of ```edge-length``` and ```epsilon``` may greatly affect RAM usage and runtime. Start with the default values and adjust as needed. If more RAM is required than what is allocated to the Docker container, then this process will be killed and you will most likely see a Segmentation Fault error.
 
-You can check CPU and RAM usage of the running container using:
+To check CPU and RAM usage of any running container, open another shell and enter the following command,
 
 ```bash
 docker stats
 ```
 
-#### Output & Visualization
+### 5. Output & Visualization
 
 When meshing is complete, an ABAQUS ```.inp``` and VTK ```.vtk``` file are produced. The mesh can most easily be viewed by opening ```XtalMesh.vtk``` with [ParaView](https://www.paraview.org/).
 
@@ -134,7 +141,7 @@ singularity pull docker://jonathanhestroffer/xtalmesh
 
 The above commands will download the XtalMesh docker image and create a Singularity Image File (SIF) ```xtalmesh_latest.sif```. Users can then interact with this image file in a couple different ways.
 
-#### Shell
+### 1. Shell
 
 One option is to spawn a new shell within your container and interact with it as though it were a small virtual machine. From there you can execute XtalMesh scripts as normal. Note that this is all done in your desired work directory.
 
@@ -142,13 +149,13 @@ One option is to spawn a new shell within your container and interact with it as
 singularity shell xtalmesh_latest.sif
 ```
 
-#### Executing Commands
+### 2. Executing Commands
 
 The second option is to execute a XtalMesh command within a container by specifying the image file.
 
 ```bash
-singularity exec xtalmesh_latest.sif python3 xtal_smoother.py 20 1.0
+singularity exec xtalmesh_latest.sif python3 xtal_smoother.py
 ```
 ```bash
-singularity exec xtalmesh_latest.sif python3 xtal_mesher.py 0.05 1e-3
+singularity exec xtalmesh_latest.sif python3 xtal_mesher.py
 ```

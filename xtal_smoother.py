@@ -1,7 +1,7 @@
+import argparse
 import multiprocessing
 import os
 import re
-import sys
 import time
 
 import igl
@@ -32,7 +32,7 @@ def form_edge_graph(F, edge_weights):
     -------
     G : NetworkX edge-weighted graph
     """
-    # Form graph edges and weights
+    # form graph edges and weights
     edge_list = []
     for f in F:
         w = edge_weights[f]
@@ -84,16 +84,14 @@ def graph_smooth(V, F, feat):
 
     # perform smoothing
     if feat != "bound":
-        for m in tqdm(range(laplacian_iters), position=0, ncols=0, desc="\t smoothing"):
-            Vnew = V - lamda*np.multiply(geom, np.multiply(L.dot(V), W_norm))
-            V = Vnew.copy()
+        pinned = 1
     else:
         pinned = np.isin(ntype, [2, 12])*1
         pinned = np.tile(pinned, [3, 1]).transpose()
-        for m in tqdm(range(laplacian_iters), position=0, ncols=0, desc="\t smoothing"):
-            Vnew = V - lamda * \
-                np.multiply(geom*pinned, np.multiply(L.dot(V), W_norm))
-            V = Vnew.copy()
+    for _ in tqdm(range(num_iters), position=0, ncols=0, desc="\t smoothing"):
+        Vnew = V - lamda*np.multiply(geom*pinned,
+                                     np.multiply(L.dot(V), W_norm))
+        V = Vnew.copy()
     return np.array(V)
 
 
@@ -139,54 +137,55 @@ def natural_sort(l):
 
 
 # Start program
-t0 = time.time()
-laplacian_iters = int(sys.argv[1])
-lamda = float(sys.argv[2])
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--lamda', type=float, default=1)
+    parser.add_argument('--num-iters', type=int, default=20)
 
-print("\n\n================")
-print(" XTAL_SMOOTHER")
-print("================")
+    args = parser.parse_args()
+    lamda = args.lamda
+    num_iters = args.num_iters
 
+    t0 = time.time()
+    print("\n\n================")
+    print(" XTAL_SMOOTHER")
+    print("================")
 
-# Load Data
-print("Reading Triangle Data")
-V = pd.read_csv("nodes.txt", skiprows=4, sep="\s+").to_numpy()
-F = pd.read_csv("triangles.txt", skiprows=8, sep="\s+").to_numpy()
-ntype = pd.read_csv("nodetype.txt").to_numpy().flatten()
-flabel = pd.read_csv("facelabels.txt").to_numpy()
+    # Load data
+    print("Reading Triangle Data")
+    V = pd.read_csv("nodes.txt", skiprows=4, sep="\s+").to_numpy()
+    F = pd.read_csv("triangles.txt", skiprows=8, sep="\s+").to_numpy()
+    ntype = pd.read_csv("nodetype.txt").to_numpy().flatten()
+    flabel = pd.read_csv("facelabels.txt").to_numpy()
 
+    # Setting up geometric constraints for nodes on faces/edges/corners
+    xface = 1*~np.isin(V[:, 0], [np.min(V[:, 0]), np.max(V[:, 0])])
+    yface = 1*~np.isin(V[:, 1], [np.min(V[:, 1]), np.max(V[:, 1])])
+    zface = 1*~np.isin(V[:, 2], [np.min(V[:, 2]), np.max(V[:, 2])])
+    geom = np.vstack([xface, yface, zface]).transpose()
 
-# Setting up geometric constraints for nodes on faces/edges/corners
-xface = 1*~np.isin(V[:, 0], [np.min(V[:, 0]), np.max(V[:, 0])])
-yface = 1*~np.isin(V[:, 1], [np.min(V[:, 1]), np.max(V[:, 1])])
-zface = 1*~np.isin(V[:, 2], [np.min(V[:, 2]), np.max(V[:, 2])])
-geom = np.vstack([xface, yface, zface]).transpose()
+    # Perform smoothing
+    print("Smooth Exterior Triple Lines")
+    V = graph_smooth(V, F, feat="ext_triple")
+    print("Smooth Interior Triple Lines")
+    V = graph_smooth(V, F, feat="int_triple")
+    print("Smooth Boundaries")
+    V = graph_smooth(V, F, feat="bound")
 
+    # Process-based parallelization of writing grain surface meshes
+    if os.path.isdir("GrainSTLs"):
+        os.system("rm -r GrainSTLs")
 
-# Perform smoothing
-print("Smooth Exterior Triple Lines")
-V = graph_smooth(V, F, feat="ext_triple")
-print("Smooth Interior Triple Lines")
-V = graph_smooth(V, F, feat="int_triple")
-print("Smooth Boundaries")
-V = graph_smooth(V, F, feat="bound")
+    os.mkdir("GrainSTLs")
+    print("Writing Grain Surface Meshes")
+    grain_ids = np.unique(flabel)
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    result = pool.map(write_grain_mesh, grain_ids[grain_ids != -1])
+    pool.close()
+    pool.join()
 
+    # Write whole surface mesh
+    print("Writing Whole Surface Mesh")
+    igl.write_triangle_mesh("Whole.stl", V, F, force_ascii=False)
 
-# Process-based parallelization of writing grain surface meshes
-if os.path.isdir("GrainSTLs"):
-    os.system("rm -r GrainSTLs")
-os.mkdir("GrainSTLs")
-print("Writing Grain Surface Meshes")
-grain_ids = np.unique(flabel)
-pool = multiprocessing.Pool(multiprocessing.cpu_count())
-result = pool.map(write_grain_mesh, grain_ids[grain_ids != -1])
-pool.close()
-pool.join()
-
-
-# Write whole surface mesh
-print("Writing Whole Surface Mesh")
-igl.write_triangle_mesh("Whole.stl", V, F, force_ascii=False)
-
-
-print("FINISHED - Total processing time: ", time.time() - t0, "s\n")
+    print("FINISHED - Total processing time: ", time.time() - t0, "s\n")

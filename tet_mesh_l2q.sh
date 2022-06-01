@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 #
 g++ -c -Wall tet_mesh_l2q.cpp
 if [ $? -ne 0 ]; then

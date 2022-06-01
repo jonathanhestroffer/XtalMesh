@@ -27,13 +27,17 @@ RUN \
 	cmake \
 	wget \
 	gcc \
-	g++
-
+	g++ \
+	dos2unix
 
 # XtalMesh
 RUN \
 	git clone https://github.com/jonathanhestroffer/XtalMesh.git
-
+RUN \
+	cd XtalMesh && \
+	chmod -R 777 $PWD && \
+	dos2unix tet_mesh_l2q.sh && \
+	./tet_mesh_l2q.sh
 
 # PyMesh
 RUN \
@@ -74,7 +78,7 @@ RUN \
 	cd libigl-python-bindings && \
 	python3 setup.py install && \
 	python3 setup.py test
-
+	
 
 RUN \
 	pip install numba && \

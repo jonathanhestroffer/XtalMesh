@@ -1,7 +1,7 @@
+import argparse
 import glob
 import os
 import re
-import sys
 import time
 
 import igl
@@ -48,12 +48,20 @@ def tets_to_tris(tets):
         Array of triangle connectivities. 
     """
     num_tets = len(tets)
-    tris = np.zeros((4*num_tets, 6), dtype=tets.dtype)
-    for i, c in enumerate(tets):
-        tris[4*i:4*(i+1)] = np.asarray([[c[0], c[2], c[1], c[4], c[5], c[6]],
-                                        [c[0], c[1], c[3], c[4], c[7], c[8]],
-                                        [c[0], c[3], c[2], c[6], c[7], c[9]],
-                                        [c[1], c[2], c[3], c[5], c[8], c[9]]], dtype="int32")
+    if order == 2:
+        tris = np.zeros((4*num_tets, 6), dtype=tets.dtype)
+        for i, c in enumerate(tets):
+            tris[4*i:4*(i+1)] = np.asarray([[c[0], c[2], c[1], c[4], c[5], c[6]],
+                                            [c[0], c[1], c[3], c[4], c[7], c[8]],
+                                            [c[0], c[3], c[2], c[6], c[7], c[9]],
+                                            [c[1], c[2], c[3], c[5], c[8], c[9]]], dtype="int32")
+    else:
+        tris = np.zeros((4*num_tets, 3), dtype=tets.dtype)
+        for i, c in enumerate(tets):
+            tris[4*i:4*(i+1)] = np.asarray([[c[0], c[2], c[1]],
+                                            [c[0], c[1], c[3]],
+                                            [c[0], c[3], c[2]],
+                                            [c[1], c[2], c[3]]], dtype="int32")
     return tris
 
 
@@ -157,110 +165,105 @@ def generate_node_sets(mesh, nodes, epsilon):
 
 
 # Start program
-t0 = time.time()
-edge_length = sys.argv[1]
-epsilon = sys.argv[2]
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--edge-length', type=float, default=5e-2)
+    parser.add_argument('--epsilon', type=float, default=1e-3)
+    parser.add_argument('--order', type=int, default=2)
 
-print("\n\n================")
-print(" XTAL_MESHER")
-print("================")
+    args = parser.parse_args()
+    edge_length = args.edge_length
+    epsilon = args.epsilon
+    order = args.order
 
-# Compile c++ linear->quad conversion script
-os.system("chmod -R 777 $PWD")
-os.system("./tet_mesh_l2q.sh")
+    t0 = time.time()
+    print("\n\n================")
+    print(" XTAL_MESHER")
+    print("================")
 
-# Call fTetWild
-print("Meshing With fTetWild")
-os.system(
-    "/fTetWild/build/./FloatTetwild_bin"
-    + " --input Whole.stl"
-    + " --output Volume_1.msh"
-    + " --disable-filtering"
-    + " -l " + edge_length
-    + " -e " + epsilon
-)
-while os.path.exists("Volume_1.msh") == False:
-    time.sleep(10)
-print("Meshing Completed")
+    # Call fTetWild
+    print("Meshing With fTetWild")
+    os.system(
+        "/fTetWild/build/./FloatTetwild_bin"
+        + " --input Whole.stl"
+        + " --output Volume_1.msh"
+        + " --disable-filtering"
+        + " -l " + str(edge_length)
+        + " -e " + str(epsilon)
+    )
+    while os.path.exists("Volume_1.msh") == False:
+        time.sleep(10)
+    print("Meshing Completed")
 
+    # Load fTetWild output
+    mesh = pymesh.load_mesh("Volume_1.msh")
+    elements = mesh.elements
+    nodes = mesh.vertices
 
-# Load fTetWild output
-mesh = pymesh.load_mesh("Volume_1.msh")
-elements = mesh.elements
-nodes = mesh.vertices
+    # Prepare winding number computation & grain ID assignment
+    numcells = len(elements)
+    centroids = np.mean(nodes[elements], 1)
+    grain_ids = np.zeros((numcells,))
 
+    # Loop through grains & perform inside/outside segmentation
+    files = glob.glob("GrainSTLs/*.stl")
+    for f in tqdm(files,
+                  leave=True,
+                  ncols=0,
+                  desc="Assigning Element GrainIDs",
+                  ):
+        grain_id = os.path.basename(f)[:-4]
+        V, F = igl.read_triangle_mesh(f)
+        # skip bad mesh
+        if V.shape[0] < 4:
+            continue
+        P = igl.fast_winding_number_for_meshes(V, F, centroids)
+        grain_ids[np.where(P > 0.01)[0]] = int(grain_id)
 
-# Prepare winding number computation & grain ID assignment
-numcells = len(elements)
-centroids = np.mean(nodes[elements], 1)
-grain_ids = np.zeros((numcells,))
+    # Remove void mesh (ID == 0)
+    print("Removing Bounding Mesh")
+    ind = np.where(grain_ids != 0)[0]
+    grain_ids = grain_ids[ind].astype(int)
+    submesh = pymesh.submesh(mesh, ind, 0)
+    nodes, elements = submesh.vertices, submesh.elements
 
+    # Convert to quadratic with tet_mesh_l2q
+    if order == 2:
+        print("Converting To Quadratic Tets")
+        np.savetxt("lin_nodes.txt", nodes)
+        np.savetxt("lin_elements.txt", elements, fmt="%i")
+        os.system("/XtalMesh/./tet_mesh_l2q lin")
+        while os.path.exists("lin_l2q_elements.txt") == False:
+            time.sleep(10)
+        # Load quadratic mesh & re-order elements
+        nodes = np.loadtxt("lin_l2q_nodes.txt").astype("double")
+        elements = np.loadtxt("lin_l2q_elements.txt").astype("int32")
+        elements = elements[:, [0, 1, 2, 3, 4, 7, 5, 6, 8, 9]]
+        cells = [("tetra10", elements)]
+    else:
+        cells = [("tetra", elements)]
+    mesh = meshio.Mesh(nodes, cells)
+    print('Generating Element and Node Sets...')
+    mesh = generate_element_sets(mesh, grain_ids)
+    mesh = generate_node_sets(mesh, nodes, epsilon)
 
-# Loop through grains & perform inside/outside segmentation
-files = glob.glob("GrainSTLs/*.stl")
-for f in tqdm(files,
-              leave=True,
-              ncols=0,
-              desc="Assigning Element GrainIDs",
-              ):
-    grain_id = os.path.basename(f)[:-4]
-    V, F = igl.read_triangle_mesh(f)
+    # Write output
+    print("Writing .VTK & .INP")
+    meshio.abaqus.write("XtalMesh.inp", mesh)
+    meshio.vtk.write("XtalMesh.vtk", mesh)
 
-    # skip bad mesh
-    if V.shape[0] < 4:
-        continue
+    # Fix XtalMesh.inp
+    with open("XtalMesh.inp", "r+") as f:
+        lines = f.readlines()
+        f.seek(0)
+        f.truncate()
+        if order == 2:
+            idx = lines.index("*Element,type=C3D10MH\n")
+            lines[idx] = "*Element, type=C3D10\n"
+        f.writelines(lines[:-1])
 
-    P = igl.fast_winding_number_for_meshes(V, F, centroids)
-    grain_ids[np.where(P > 0.01)[0]] = int(grain_id)
+    # Clean-up
+    os.system("rm -rf Volume_1*")
+    os.system("rm -rf lin*")
 
-
-# Remove void mesh (ID == 0)
-print("Removing Bounding Mesh")
-ind = np.where(grain_ids != 0)[0]
-submesh = pymesh.submesh(mesh, ind, 0)
-grain_ids = grain_ids[ind].astype(int)
-
-
-# Convert to quadratic with tet_mesh_l2q
-print("Converting To Quadratic Tets")
-nodes, elements = submesh.vertices, submesh.elements
-np.savetxt("lin_nodes.txt", nodes)
-np.savetxt("lin_elements.txt", elements, fmt="%i")
-os.system("./tet_mesh_l2q lin")
-while os.path.exists("lin_l2q_elements.txt") == False:
-    time.sleep(10)
-
-
-# Load quadratic mesh & re-order elements
-nodes = np.loadtxt("lin_l2q_nodes.txt").astype("double")
-elements = np.loadtxt("lin_l2q_elements.txt").astype("int32")
-elements = elements[:, [0, 1, 2, 3, 4, 7, 5, 6, 8, 9]]
-cells = [("tetra10", elements)]
-mesh = meshio.Mesh(nodes, cells)
-print('Generating Element and Node Sets...')
-mesh = generate_element_sets(mesh, grain_ids)
-mesh = generate_node_sets(mesh, nodes, epsilon)
-
-
-# Write output
-print("Writing .VTK & .INP")
-meshio.abaqus.write("XtalMesh.inp", mesh)
-meshio.vtk.write("XtalMesh.vtk", mesh)
-
-
-# Fix XtalMesh.inp
-with open("XtalMesh.inp", "r+") as f:
-    lines = f.readlines()
-    f.seek(0)
-    f.truncate()
-    idx = lines.index("*Element,type=C3D10MH\n")
-    lines[idx] = "*Element, type=C3D10\n"
-    f.writelines(lines[:-1])
-
-
-# Clean-up
-os.system("rm -rf Volume_1*")
-os.system("rm -rf lin*")
-
-
-print("FINISHED - Total processing time: ", time.time() - t0, "s\n")
+    print("FINISHED - Total processing time: ", time.time() - t0, "s\n")
